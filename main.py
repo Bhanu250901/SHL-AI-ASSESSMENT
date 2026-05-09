@@ -12,6 +12,9 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[Message]
+@app.get("/")
+def home():
+    return {"message": "SHL AI Assessment API is running"}
 
 @app.get("/health")
 def health():
