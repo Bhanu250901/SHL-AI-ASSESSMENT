@@ -4,7 +4,11 @@ import pandas as pd
 
 app = FastAPI()
 
-df = pd.read_csv("shl_catalog.csv")
+# Load SHL catalog
+try:
+    df = pd.read_csv("shl_catalog.csv")
+except:
+    df = pd.DataFrame(columns=["name", "url"])
 
 class Message(BaseModel):
     role: str
@@ -12,36 +16,35 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[Message]
+
 @app.get("/")
 def home():
-    return {"message": "SHL AI Assessment API is running"}
+    return {"message": "SHL AI Assessment API running"}
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-@app.post("/chat")
-def chat(req: ChatRequest):
+# Retrieval function
+def retrieve_assessments(query):
 
-    last_message = req.messages[-1].content.lower()
+    query = query.lower()
 
     recommendations = []
 
     keywords = {
         "java": "Java",
         "python": "Python",
-        "personality": "OPQ",
         "developer": "Developer",
-        "manager": "Management"
+        "manager": "Management",
+        "personality": "OPQ",
+        "cognitive": "Verify",
+        "leadership": "Leadership"
     }
-
-    matched = False
 
     for key, value in keywords.items():
 
-        if key in last_message:
-
-            matched = True
+        if key in query:
 
             filtered = df[df["name"].str.contains(value, case=False, na=False)]
 
@@ -53,16 +56,63 @@ def chat(req: ChatRequest):
                     "test_type": "K"
                 })
 
-    if matched and recommendations:
+    return recommendations[:10]
+
+@app.post("/chat")
+def chat(req: ChatRequest):
+
+    if not req.messages:
+        return {
+            "reply": "Please provide hiring requirements.",
+            "recommendations": [],
+            "end_of_conversation": False
+        }
+
+    last_message = req.messages[-1].content.lower()
+
+    # Clarification support
+    if len(last_message.split()) < 3:
 
         return {
-            "reply": "Here are recommended SHL assessments.",
-            "recommendations": recommendations[:10],
+            "reply": "Please specify role, skills, and seniority level.",
+            "recommendations": [],
+            "end_of_conversation": False
+        }
+
+    # Comparison support
+    if "compare" in last_message or "vs" in last_message:
+
+        return {
+            "reply": "OPQ focuses on personality insights while Verify focuses on cognitive abilities and job readiness.",
+            "recommendations": [],
             "end_of_conversation": True
         }
 
+    # Refinement support
+    if "add" in last_message:
+
+        recommendations = retrieve_assessments(last_message)
+
+        return {
+            "reply": "Updated recommendations with additional constraints.",
+            "recommendations": recommendations,
+            "end_of_conversation": True
+        }
+
+    # Retrieval
+    recommendations = retrieve_assessments(last_message)
+
+    # No results
+    if not recommendations:
+
+        return {
+            "reply": "Could not find relevant SHL assessments. Please refine your query.",
+            "recommendations": [],
+            "end_of_conversation": False
+        }
+
     return {
-        "reply": "Please tell me role, skills, and experience level.",
-        "recommendations": [],
-        "end_of_conversation": False
+        "reply": "Here are recommended SHL assessments based on your hiring requirements.",
+        "recommendations": recommendations,
+        "end_of_conversation": True
     }
